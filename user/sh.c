@@ -1,9 +1,29 @@
 // Shell.
-
 #include "kernel/types.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
-
+#include "kernel/stat.h"
+#include "kernel/fs.h"
+#define HISTORY_SIZE 16
+#define CMD_LEN 128
+static char history[HISTORY_SIZE][CMD_LEN];
+static int hist_count = 0;      // total commands stored
+static int hist_next = 0;       // next index to overwrite
+void add_to_history(const char *cmd) {
+  if(cmd[0] == '\0')
+    return;
+  if(hist_count > 0){
+    int last = (hist_next - 1 + HISTORY_SIZE) % HISTORY_SIZE;
+    if(strcmp(history[last], cmd) == 0)
+      return;
+  }
+  strcpy(history[hist_next], cmd);
+  history[hist_next][CMD_LEN-1] = '\0';
+  hist_next = (hist_next + 1) % HISTORY_SIZE;
+  if(hist_count < HISTORY_SIZE)
+    hist_count++;
+}
+int interactive = 0;
 // Parsed command representation
 #define EXEC  1
 #define REDIR 2
@@ -76,7 +96,15 @@ runcmd(struct cmd *cmd)
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
       exit(1);
-    exec(ecmd->argv[0], ecmd->argv);
+ // --- Built-in: history ---
+  if(strcmp(ecmd->argv[0], "history") == 0){
+    for(int i = 0; i < hist_count; i++){
+      int idx = (hist_next - hist_count + i + HISTORY_SIZE) % HISTORY_SIZE;
+      printf("%d  %s\n", i+1, history[idx]);
+    }
+    exit(0);
+  } 
+   exec(ecmd->argv[0], ecmd->argv);
     fprintf(2, "exec %s failed\n", ecmd->argv[0]);
     break;
 
@@ -128,17 +156,59 @@ runcmd(struct cmd *cmd)
       runcmd(bcmd->cmd);
     break;
   }
+
   exit(0);
 }
-
-int
-getcmd(char *buf, int nbuf)
+char *commands[] = {"ls", "cat", "echo", "grep", "find", "sleep", "uptime", 0};
+/*int getcmd(char *buf, int nbuf)
 {
   write(2, "$ ", 2);
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
-  if(buf[0] == 0) // EOF
+  if(buf[0] == 0)
     return -1;
+  return 0;
+}*/
+int
+getcmd(char *buf, int nbuf)
+{
+  int i = 0;
+  char c;
+
+  write(2, "$ ", 2);
+
+  while (i+1 < nbuf) {
+    if (read(0, &c, 1) != 1)
+      return -1;
+
+    if (c == '\n' || c == '\r') {
+      buf[i] = 0;
+      return 0;
+    }
+
+    if (c == '\t') {
+      // --- Tab Completion ---
+      buf[i] = 0;  // terminate what’s typed so far
+      for (int j = 0; commands[j]; j++) {
+        int k = 0;
+        while (buf[k] && buf[k] == commands[j][k])
+          k++;
+        if (buf[k] == 0) {
+          // Found a match: complete it
+          strcpy(buf, commands[j]);
+          i = strlen(buf);
+          write(2, commands[j] + k, strlen(commands[j]) - k);
+          break;
+        }
+      }
+      continue;
+    }
+
+    buf[i++] = c;
+    write(2, &c, 1); // echo back
+  }
+
+  buf[i] = 0;
   return 0;
 }
 
@@ -155,14 +225,23 @@ main(void)
       break;
     }
   }
+struct stat st;
+if (fstat(0, &st) >= 0 && st.type == T_DEVICE) {
+  interactive = 1;   // running from terminal
+}
 
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
+	if(strcmp(buf, "wait\n") == 0){
+  	while(wait(0) > 0) ;
+  	continue; // skip the fork, go back to prompt
+	}
     char *cmd = buf;
     while (*cmd == ' ' || *cmd == '\t')
       cmd++;
     if (*cmd == '\n') // is a blank command
       continue;
+	add_to_history(cmd);
     if(cmd[0] == 'c' && cmd[1] == 'd' && cmd[2] == ' '){
       // Chdir must be called by the parent, not the child.
       cmd[strlen(cmd)-1] = 0;  // chop \n
