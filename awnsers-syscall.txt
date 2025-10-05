@@ -1,0 +1,18 @@
+→ The call came from usertrap, which then entered syscall.
+
+Q2: What is the value of p->trapframe->a7 and what does it represent?
+→ The register a7 held 0xf (decimal 15). This corresponds to the system call number SYS_open, issued by the init program.
+
+Q3: What was the previous mode that the CPU was in?
+→ The SPP bit equals 0, meaning the processor had been running in user mode before switching into supervisor mode.
+
+Q4: Write down the assembly instruction the kernel is panicking at. Which register corresponds to the variable num?
+→ The panic occurred at sepc=0x80001c7e, where the instruction is:
+   `lw a3,0(zero)`
+   Here, the local variable `num` is stored in register a3.
+
+Q5: Why does the kernel crash?
+→ The instruction tries to dereference address 0x0. Since the kernel’s virtual address space does not map address 0, this produces a page fault. The scause val>
+Q6: What process was executing when the kernel panicked? What was its pid?
+→ The process in execution was `init`, and its process ID was 1.
+
