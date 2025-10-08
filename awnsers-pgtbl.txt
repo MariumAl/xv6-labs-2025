@@ -1,0 +1,116 @@
+1.
+
+Page table entry:
+va 0x0 pte 0x21FC885B pa 0x87F22000
+Permission bits (0x5B):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U
+Explanation:
+This is the first virtual page of the process — typically contains part of the program’s text (code) or data. The page is valid and accessible in user mode for read, write, and execute.
+
+2.
+
+Page table entry:
+va 0x1000 pte 0x21FC7C5B pa 0x87F1F000
+Permission bits (0x5B):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U
+Explanation:
+Second page of the process. Also valid user page with full R/W/X permissions — usually more code or initialized data.
+
+3.
+
+Page table entry:
+va 0x2000 pte 0x21FC7817 pa 0x87F1E000
+Permission bits (0x17):
+PTE_V | PTE_R | PTE_W | PTE_U (no execute bit)
+Explanation:
+This page is valid, user-accessible, and readable/writable, but not executable — likely part of the data section (global/static variables).
+
+4.
+
+Page table entry:
+va 0x3000 pte 0x21FC7407 pa 0x87F1D000
+Permission bits (0x07):
+PTE_V | PTE_R | PTE_W (kernel-only; no user or execute)
+Explanation:
+Valid, readable, and writable by the kernel but not user-accessible. Typically reserved for kernel data structures used to support this process.
+
+5.
+
+Page table entry:
+va 0x4000 pte 0x21FC70D7 pa 0x87F1C000
+Permission bits (0xD7):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U | PTE_G
+Explanation:
+Valid user page with full permissions (R/W/X) plus possibly the “global” bit (G). Could be part of the user stack or heap.
+
+6.
+
+Page table entry:
+va 0x5000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+No mapping — this virtual address does not have a physical page assigned.
+
+7.
+
+Page table entry:
+va 0x6000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use by the process.
+
+8.
+
+Page table entry:
+va 0x7000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use.
+
+9.
+
+Page table entry:
+va 0x8000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use.
+
+10.
+
+Page table entry:
+va 0x9000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use.
+
+11–17.
+
+Page table entries:
+va 0x3FFFFF6000 … va 0x3FFFFFD000 all have pte 0x0
+Permission bits:
+0x0
+Explanation:
+These high virtual addresses in the user address space are also unmapped. No physical pages backing them.
+
+18.
+
+Page table entry:
+va 0x3FFFFFE000 pte 0x21FD08C7 pa 0x87F42000
+Permission bits (0xC7):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U
+Explanation:
+This is near the top of the user address space — typically the user stack page. Valid and accessible in user mode with full R/W/X permissions.
+
+19.
+
+Page table entry:
+va 0x3FFFFFF000 pte 0x2000184B pa 0x80006000
+Permission bits (0x4B):
+PTE_V | PTE_R | PTE_X (no write, user accessible)
+Explanation:
+Maps into kernel memory, often the trampoline page used for entering/exiting the kernel during traps and system calls. It is executable but not writable.

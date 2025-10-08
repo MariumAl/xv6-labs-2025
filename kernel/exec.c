@@ -131,9 +131,14 @@ kexec(char *path, char **argv)
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;
   p->sz = sz;
-  p->trapframe->epc = elf.entry;  // initial program counter = ulib.c:start()
+  p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
+
+// lab 3 q3
+  if(p->pid == 1){
+    vmprint(p->pagetable);
+  }
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 

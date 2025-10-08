@@ -1,0 +1,184 @@
+
+Q1:
+1.
+
+Page table entry:
+va 0x0 pte 0x21FC885B pa 0x87F22000
+Permission bits (0x5B):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U
+Explanation:
+This is the first virtual page of the process — typically contains part of the program’s text (code) or data. The page is valid and accessible in user mode for read, write, and execute.
+
+2.
+
+Page table entry:
+va 0x1000 pte 0x21FC7C5B pa 0x87F1F000
+Permission bits (0x5B):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U
+Explanation:
+Second page of the process. Also valid user page with full R/W/X permissions — usually more code or initialized data.
+
+3.
+
+Page table entry:
+va 0x2000 pte 0x21FC7817 pa 0x87F1E000
+Permission bits (0x17):
+PTE_V | PTE_R | PTE_W | PTE_U (no execute bit)
+Explanation:
+This page is valid, user-accessible, and readable/writable, but not executable — likely part of the data section (global/static variables).
+
+4.
+
+Page table entry:
+va 0x3000 pte 0x21FC7407 pa 0x87F1D000
+Permission bits (0x07):
+PTE_V | PTE_R | PTE_W (kernel-only; no user or execute)
+Explanation:
+Valid, readable, and writable by the kernel but not user-accessible. Typically reserved for kernel data structures used to support this process.
+
+5.
+
+Page table entry:
+va 0x4000 pte 0x21FC70D7 pa 0x87F1C000
+Permission bits (0xD7):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U | PTE_G
+Explanation:
+Valid user page with full permissions (R/W/X) plus possibly the “global” bit (G). Could be part of the user stack or heap.
+
+6.
+
+Page table entry:
+va 0x5000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+No mapping — this virtual address does not have a physical page assigned.
+
+7.
+
+Page table entry:
+va 0x6000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use by the process.
+
+8.
+
+Page table entry:
+va 0x7000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use.
+
+9.
+
+Page table entry:
+va 0x8000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use.
+
+10.
+
+Page table entry:
+va 0x9000 pte 0x0 pa 0x0
+Permission bits:
+0x0
+Explanation:
+Unmapped page — not in use.
+
+11–17.
+
+Page table entries:
+va 0x3FFFFF6000 … va 0x3FFFFFD000 all have pte 0x0
+Permission bits:
+0x0
+Explanation:
+These high virtual addresses in the user address space are also unmapped. No physical pages backing them.
+
+18.
+
+Page table entry:
+va 0x3FFFFFE000 pte 0x21FD08C7 pa 0x87F42000
+Permission bits (0xC7):
+PTE_V | PTE_R | PTE_W | PTE_X | PTE_U
+Explanation:
+This is near the top of the user address space — typically the user stack page. Valid and accessible in user mode with full R/W/X permissions.
+
+19.
+
+Page table entry:
+va 0x3FFFFFF000 pte 0x2000184B pa 0x80006000
+Permission bits (0x4B):
+PTE_V | PTE_R | PTE_X (no write, user accessible)
+Explanation:
+Maps into kernel memory, often the trampoline page used for entering/exiting the kernel during traps and system calls. It is executable but not writable.
+
+Q2:
+The optimization maps a read-only page at the address USYSCALL into each process’s address space.
+This page holds a struct usyscall that is initialized with the process’s PID.
+The user-space function ugetpid() can then read the PID directly from this page instead of making a regular system call, avoiding the overhead of crossing the kernel boundary.
+Similar optimizations could be applied to other system calls that return small, read-only pieces of kernel state, such as getppid() or time(), to further reduce overhead.
+
+Q3:
+
+The vmprint() function in vm.c displays the complete three-level page table used by RISC-V.
+Each printed line represents a valid page table entry (PTE) at a particular level, showing the virtual address it maps, the PTE’s flags, and the corresponding physical address.
+
+In my output, the root (top-level) page table was located at 0x0000000087f52000.
+The entries beneath it show valid mappings for this process’s address space.
+The indentation (.. ..) reflects the depth in the page-table hierarchy.
+
+For example, some lower-level entries were:
+
+.. .. ..0:  pte 0x0000000021fd381b  pa 0x0000000087f4f000
+.. .. ..1:  pte 0x0000000021fd2c17  pa 0x0000000087f4c000
+.. .. ..2:  pte 0x0000000021fd2807  pa 0x0000000087f4b000
+.. .. ..3:  pte 0x0000000021fd2417  pa 0x0000000087f4a000
+
+
+These leaf pages correspond to the user-space segments of the program — such as the code (text) segment, data/BSS sections, and the stack.
+Each leaf-level PTE directly maps a virtual page to a real physical memory page used by the process.
+
+The PTE flags (e.g., 0x1B, 0x17, 0x07) indicate combinations of permissions:
+
+PTE_V – valid
+
+PTE_R – readable
+
+PTE_W – writable
+
+PTE_X – executable
+
+PTE_U – accessible from user mode
+
+For instance:
+
+0x1B → valid, user, readable, writable (typical for data pages)
+
+0x17 → valid, user, readable, executable (typical for code pages)
+
+0x07 → valid, readable, writable, executable (e.g., stack or special pages)
+
+These correspond to the mappings seen in print_pgtbl(), which showed a linear mapping of user virtual addresses (e.g., from 0x0 up to 0x4000).
+
+At the higher virtual addresses (close to the top of the address space), we find entries like:
+
+.. .. ..509:  pte 0x0000000021fd5413  pa 0x0000000087f56000
+.. .. ..510:  pte 0x0000000021fd5807  pa 0x0000000087f57000
+.. .. ..511:  pte 0x000000002000180b  pa 0x0000000080006000
+
+
+These are kernel-mapped pages that appear in every process’s page table:
+
+The trapframe page, which stores register states during system calls and interrupts.
+
+The trampoline page, which contains the small assembly routines for entering and exiting the kernel.
+
+The flags for these typically include PTE_V (valid), PTE_R (readable), and sometimes PTE_X (executable, for the trampoline), but usually exclude PTE_W since they map code or fixed kernel data.
+
+Compared to the simpler, linear view shown by print_pgtbl(), the vmprint() output exposes the true three-level structure used by the hardware for address translation.
+This gives a clearer picture of how the operating system organizes and protects both user and kernel memory spaces.

@@ -6,8 +6,8 @@
 // 00001000 -- boot ROM, provided by qemu
 // 02000000 -- CLINT
 // 0C000000 -- PLIC
-// 10000000 -- uart0 
-// 10001000 -- virtio disk 
+// 10000000 -- uart0
+// 10001000 -- virtio disk
 // 80000000 -- qemu's boot ROM loads the kernel here,
 //             then jumps here.
 // unused RAM after 80000000.
@@ -41,6 +41,7 @@
 // for use by the kernel and user pages
 // from physical address 0x80000000 to PHYSTOP.
 #define KERNBASE 0x80000000L
+#define SUPERBASE (KERNBASE + 112*1024*1024) //ADDED FOR LAB 3 Q4
 #define PHYSTOP (KERNBASE + 128*1024*1024)
 
 // map the trampoline page to the highest address,
@@ -63,7 +64,7 @@
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
 #ifdef LAB_PGTBL
-#define USYSCALL (TRAPFRAME - PGSIZE)
+#define USYSCALL (TRAPFRAME - PGSIZE) //lab 3
 
 struct usyscall {
   int pid;  // Process ID
