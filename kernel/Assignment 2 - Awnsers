@@ -1,0 +1,36 @@
+Note: I accidently saw the older book version 3, instead of version 5 and implemented q2(lazy memory allocation) from that version
+aswell in this branch, before realizing this. ☹ 
+Q2. 
+It is possible, in theory, to avoid the trapframe page by storing registers directly on the kernel stack or in the proc structure. 
+In the current xv6 design, uservec saves all 32 user registers into a TRAPFRAME page in user space whenever a trap occurs. To eliminate
+this per-process TRAPFRAME, uservec could instead push the registers directly onto the kernel stack or copy them into a struct proc field,
+such as proc->saved_regs, including registers like ra, sp, s0-s11, a0-a7, t0-t6, and pc. After switching to the kernel page table via satp, 
+usertrap can access the saved registers from the kernel memory instead of user space and handle system calls, device interrupts, or exceptions
+by calling functions like syscall(), trap(), or kerneltrap(). On returning to user space, usertrapret restores the saved registers from the
+kernel stack or proc->saved_regs, resets sepc to the instruction that caused the trap, and switches back to the user page table before executing sret.
+Optional adjustments include initializing proc->saved_regs in allocproc() or fork(), ensuring the kernel stack has sufficient space for all registers, 
+and maintaining multi-CPU safety if the proc field is accessed on different cores.
+Saving registers on the kernel stack would eliminate the need for a mapped trapframe, but the kernel stack is limited in size, and careful management
+would be needed to save all registers and temporary values safely. Additionally, the trap handler must have a way to persist these values across traps,
+especially if a context switch occurs, which complicates the design. Similarly, writing registers directly into the proc structure would require
+the kernel to access memory that is not yet mapped in the current user page table. Since uservec runs before switching to the kernel page table,
+attempting to write to proc memory at this stage would likely trigger a page fault, negating the benefit of removing the trapframe page.
+
+Q3. Yes, in principle, xv6 could be modified to eliminate the special TRAMPOLINE page mapping. 
+One possible approach would be to copy the trap-handling entry code directly to the kernel stack of each process or to a reserved 
+kernel-space buffer accessible by all processes. This way, when a trap occurs, the CPU jumps to an address already valid in the
+kernel page table, avoiding reliance on a trampoline mapped into every user address space. The uservec assembly routine would need adjustments
+to save registers, switch page tables, and call usertrap entirely from this kernel-accessible memory.
+To start, the trap-handling entry point currently in uservec would need to be relocated to a kernel-resident memory area, such as a reserved 
+buffer or the kernel stack for each process, instead of being mapped in user space. When a trap occurs, the CPU would jump to this
+kernel-accessible trap entry, bypassing the need for the trampoline mapping. The uservec routine would still save all 32 user registers,
+but instead of writing them to the TRAPFRAME page, it could push them directly onto the kernel stack or store them in the proc structure 
+(struct proc) associated with the current process.
+Next, after saving the registers, uservec would switch the page table using satp to the kernel page table and then call usertrap
+(defined in kernel/trap.c) to determine the cause of the trap. usertrap would handle system calls, device interrupts, or exceptions
+just like in the current design. Any arguments for system calls would still be retrieved from the saved registers using existing helper functions
+such as argint() or argstr(). Returning from the trap would involve a modified usertrapret routine, which restores the saved registers from the
+kernel stack or proc structure and executes sret to return to user space.
+It must ensure that the trap entry code is always valid in the current page table at the moment of the trap.  
+Overall, while removing the TRAMPOLINE mapping is feasible, but the trampoline is a simple, reliable way to handle traps safely.
+
