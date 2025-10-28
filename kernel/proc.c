@@ -236,16 +236,16 @@ userinit(void)
 int
 growproc(int n)
 {
-  uint64 sz;
   struct proc *p = myproc();
+  uint64 sz = p-> sz;
 
-  sz = p->sz;
-  if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
-      return -1;
-    }
-  } else if(n < 0){
+//assignemmnt2 lazy mem alloc
+  if(n < 0){
+    // shrink immediately (unmap/free)
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+  } else if(n > 0){
+    // lazy: don't allocate pages now, just update size
+    sz = sz + n;
   }
   p->sz = sz;
   return 0;

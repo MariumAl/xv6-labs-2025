@@ -445,32 +445,6 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   }
 }
 
-// allocate and map user memory if process is referencing a page
-// that was lazily allocated in sys_sbrk().
-// returns 0 if va is invalid or already mapped, or if
-// out of physical memory, and physical address if successful.
-uint64
-vmfault(pagetable_t pagetable, uint64 va, int read)
-{
-  uint64 mem;
-  struct proc *p = myproc();
-
-  if (va >= p->sz)
-    return 0;
-  va = PGROUNDDOWN(va);
-  if(ismapped(pagetable, va)) {
-    return 0;
-  }
-  mem = (uint64) kalloc();
-  if(mem == 0)
-    return 0;
-  memset((void *) mem, 0, PGSIZE);
-  if (mappages(p->pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
-    kfree((void *)mem);
-    return 0;
-  }
-  return mem;
-}
 
 int
 ismapped(pagetable_t pagetable, uint64 va)
@@ -483,4 +457,29 @@ ismapped(pagetable_t pagetable, uint64 va)
     return 1;
   }
   return 0;
+}
+
+// allocate and map user memory if process is referencing a page
+// that was lazily allocated in sys_sbrk().
+// returns 0 if va is invalid or already mapped, or if
+// out of physical memory, and physical address if successful.
+uint64
+vmfault(pagetable_t pagetable, uint64 va, int read)
+{
+ struct proc *p = myproc();
+    if (va >= p->sz) {
+        printf("vmfault: va 0x%lx >= p->sz 0x%lx\n", va, p->sz);
+        return 0;
+    }
+    va = PGROUNDDOWN(va);
+    if (ismapped(pagetable, va)) return 0;
+    uint64 mem = (uint64)kalloc();
+    if (!mem) return 0;
+    memset((void*)mem, 0, PGSIZE);
+    if (mappages(pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
+        kfree((void*)mem);
+        return 0;
+    }
+    printf("vmfault: mapped va 0x%lx to pa 0x%lx\n", va, mem);
+    return mem;
 }

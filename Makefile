@@ -195,9 +195,7 @@ UPROGS=\
 	$U/_logstress\
 	$U/_forphan\
 	$U/_dorphan\
-
-
-
+	$U/_lazytest\
 
 ifeq ($(LAB),syscall)
 UPROGS += \

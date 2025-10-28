@@ -68,15 +68,13 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if((r_scause() == 15 || r_scause() == 13) &&
-            vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
-    // page fault on lazily-allocated page
-  } else {
-    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
+} else if (r_scause() == 13 || r_scause() == 15) {
+  uint64 va = r_stval();
+  if (vmfault(p->pagetable, va, (r_scause() == 13) ? 1 : 0) == 0) {
+    printf("usertrap(): lazy alloc failed for pid=%d va=0x%lx\n", p->pid, va);
     setkilled(p);
   }
-
+}
   if(killed(p))
     kexit(-1);
 
@@ -216,4 +214,3 @@ devintr()
     return 0;
   }
 }
-
