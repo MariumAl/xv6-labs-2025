@@ -6,6 +6,52 @@
 #include "proc.h"
 #include "defs.h"
 
+int ticks_since_boost = 0;
+struct proc_queue queues[QUEUE_COUNT];
+
+//add to queue
+void enqueue(struct proc_queue *q, struct proc *p){
+if ((q-> tail +1) % NPROC == q-> head){ //circular queue sod and checking that its doesnt point again to head
+panic("queue overflow");
+}
+q->procs[q->tail] = p;
+q->tail = (q-> tail +1) % NPROC;
+p->in_queue = 1;
+}
+
+struct proc *dequeue(struct proc_queue *q){
+if (is_empty(q)){ //empty queue
+retun 0;
+}
+struct proc *p = q->procs[q->head];  //assigning p the process at the head pointer of the queue
+q->head = (q->head +1) % NPROC;
+p-> in_queue = 0;
+return p;
+}
+
+int is_empty(struct proc queue *q){
+return q->head == q->tail;
+}
+
+void print_queue(void) {
+    for (int i = 0; i < QUEUE_COUNT; i++) {
+        struct proc_queue *q = &queues[i];
+        acquire(&q->lock);
+
+        printf("Queue %d: ", i);
+        int idx = q->head;
+
+        while (idx != q->tail) {
+            struct proc *p = q->procs[idx];
+            printf("%d ", p->pid);
+            idx = (idx + 1) % NPROC;
+        }
+
+        printf("\n");
+        release(&q->lock);
+    }
+}
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -51,6 +97,12 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+
+for (int i = 0; i< QUEUE_COUNT ; i++){
+queues[i].head = queues[i].tail = 0;
+initlock(&queues[i].lock, "queue_lock");
+}
+
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -146,6 +198,10 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+//new processes priority handling
+p->queue = 0; //all new procces start from highest priority
+p->time_in_queue = 0;  //starts at time 0
+
   return p;
 }
 
@@ -228,6 +284,11 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+//as the first process becomes runnable
+acquire(&queues[p-> queue].lock); //acquire lock
+enqueue(&queues[p->queue],p); //enqueue process p in  queue no (whatever p->queue is, 0 for first process)
+release(&queues[p->queue].lock); //release the lock
+
   release(&p->lock);
 }
 
@@ -297,6 +358,14 @@ kfork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+
+//as child process becomes runnable
+acquire(&queues[np->queue].lock);
+enqueue(&queues[np->queue],np);
+printf(("\nfork enqueued %d\n", np->pid);
+print_queue();
+release(&queues[np-> queue].lock);
+
   release(&np->lock);
 
   return pid;
