@@ -94,9 +94,9 @@ struct spinlock lock;
 };
 
 void enqueue(struct proc_queue *q, struct proc *p);  //enqueue to add
-struct proc* dequeue(struct proc queue *q);    //dequeue to remove
+struct proc* dequeue(struct proc_queue *q);    //dequeue to remove
 int is_empty (struct proc_queue *q);   //check if queue empty
-void print_queue(void);    print the queue
+void print_queue(void);    //print the queue
 extern int ticks_since_boost;
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 

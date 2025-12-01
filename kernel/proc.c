@@ -11,26 +11,26 @@ struct proc_queue queues[QUEUE_COUNT];
 
 //add to queue
 void enqueue(struct proc_queue *q, struct proc *p){
-if ((q-> tail +1) % NPROC == q-> head){ //circular queue sod and checking that its doesnt point again to head
-panic("queue overflow");
-}
-q->procs[q->tail] = p;
-q->tail = (q-> tail +1) % NPROC;
-p->in_queue = 1;
+	if ((q-> tail +1) % NPROC == q-> head){ //circular queue sod and checking that its doesnt point again to head
+	panic("queue overflow");
+	}
+	q->procs[q->tail] = p;
+	q->tail = (q-> tail +1) % NPROC;
+	p->in_queue = 1;
 }
 
 struct proc *dequeue(struct proc_queue *q){
-if (is_empty(q)){ //empty queue
-retun 0;
-}
-struct proc *p = q->procs[q->head];  //assigning p the process at the head pointer of the queue
-q->head = (q->head +1) % NPROC;
-p-> in_queue = 0;
-return p;
-}
+	if (is_empty(q)){ //empty queue
+	return 0;
+	}
+	struct proc *p = q->procs[q->head];  //assigning p the process at the head pointer of the queue
+	q->head = (q->head +1) % NPROC;
+	p-> in_queue = 0;
+	return p;
+	}
 
-int is_empty(struct proc queue *q){
-return q->head == q->tail;
+	int is_empty(struct proc_queue *q){
+	return q->head == q->tail;
 }
 
 void print_queue(void) {
@@ -43,7 +43,8 @@ void print_queue(void) {
 
         while (idx != q->tail) {
             struct proc *p = q->procs[idx];
-            printf("%d ", p->pid);
+            if (p != 0)
+                printf("%d ", p->pid);
             idx = (idx + 1) % NPROC;
         }
 
@@ -101,6 +102,10 @@ procinit(void)
 for (int i = 0; i< QUEUE_COUNT ; i++){
 queues[i].head = queues[i].tail = 0;
 initlock(&queues[i].lock, "queue_lock");
+
+for (int j = 0; j < NPROC; j++) {
+        queues[i].procs[j] = 0;
+    }
 }
 
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -362,10 +367,9 @@ kfork(void)
 //as child process becomes runnable
 acquire(&queues[np->queue].lock);
 enqueue(&queues[np->queue],np);
-printf(("\nfork enqueued %d\n", np->pid);
-print_queue();
 release(&queues[np-> queue].lock);
-
+printf("\nfork enqueued %d\n", np->pid);
+print_queue();
   release(&np->lock);
 
   return pid;
@@ -495,35 +499,103 @@ scheduler(void)
 
   c->proc = 0;
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
     intr_on();
-    intr_off();
 
-    int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+    //iterate over queues from highest to lowest prioities
+    for(int q = 0; q < QUEUE_COUNT; q++){
+        struct proc *p;
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
-      }
-      release(&p->lock);
+        acquire(&queues[q].lock);
+        p = dequeue(&queues[q]);
+        release(&queues[q].lock);
+
+        if(p){ //not null
+        acquire(&p->lock);
+        if(p->state == RUNNABLE){
+                //run the process
+                p->state = RUNNING;
+                c->proc = p;
+                swtch(&c->context, &p->context);
+                c->proc = 0;
+
+                //demotion or re-enqueue
+               if(p->state == RUNNABLE){
+                    int demoted = 0;
+
+                    // Demotion rule:
+                    // q==0 → 4 ticks
+                    // q==1 → 8 ticks
+                    // q==2 → 16 ticks
+                    // q==3 → infinite
+                    int timeslice;
+                    if(q == 0)      timeslice = QUEUE1_TIME;  // 4 ticks
+                    else if(q == 1) timeslice = QUEUE2_TIME;  // 8 ticks
+                    else if(q == 2) timeslice = QUEUE3_TIME;  // 16 ticks
+                    else            timeslice = 1000000000;    // "infinite"
+
+                    if(p->time_in_queue >= timeslice && p->queue < QUEUE_COUNT - 1){
+                        p->queue++;              // demote
+                        p->time_in_queue = 0;
+                        demoted = 1;
+
+                        printf("\nDemoted PID %d to Queue %d\n", p->pid, p->queue);
+                    }
+
+                    acquire(&queues[p->queue].lock);
+                    enqueue(&queues[p->queue], p);
+                    release(&queues[p->queue].lock);
+			if(demoted){
+                        print_queue();
+                    }
+                }
+            }
+            release(&p->lock);
+        }
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
+
+    //boosting logic
+    if(ticks_since_boost >= BOOST_TIME){
+        //boost
+        for(int q = 1; q < QUEUE_COUNT; q++){
+        acquire(&queues[q].lock);
+        while(!is_empty(&queues[q])){
+          struct proc *p = dequeue(&queues[q]);
+             release(&queues[q].lock);
+
+             if(!p) break;
+
+              printf("\nboosting %d\n", p->pid);
+
+                acquire(&p->lock);
+                p->queue = 0;            //move to highest priority queue
+                p->time_in_queue = 0;    //reset time
+                release(&p->lock);
+
+                acquire(&queues[0].lock);
+                enqueue(&queues[0], p);
+                release(&queues[0].lock);
+
+                print_queue();
+
+                acquire(&queues[q].lock);
+            }
+            release(&queues[q].lock);
+        }
+        ticks_since_boost = 0; //reset timer
+    }
+//If there was nothing runnable in any queue, idle the CPU
+    int found = 0;
+    for(p = proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if(p->state == RUNNABLE){
+            found = 1;
+            release(&p->lock);
+            break;
+        }
+        release(&p->lock);
+    }
+    if(found == 0){
+        asm volatile("wfi");
     }
   }
 }
@@ -633,9 +705,6 @@ sleep(void *chan, struct spinlock *lk)
   release(&p->lock);
   acquire(lk);
 }
-
-// Wake up all processes sleeping on channel chan.
-// Caller should hold the condition lock.
 void
 wakeup(void *chan)
 {
@@ -646,7 +715,15 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
-      }
+
+//scheduler also called in sleep so
+	if (!p->in_queue){
+	p->time_in_queue = 0;
+	acquire(&queues[p->queue].lock);
+	enqueue(&queues[p->queue], p); //enqueueback into queue it was in before sleep. with lock
+	release(&queues[p->queue].lock);
+	}
+       }
       release(&p->lock);
     }
   }

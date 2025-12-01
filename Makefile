@@ -196,8 +196,10 @@ UPROGS=\
 	$U/_forphan\
 	$U/_dorphan\
 	$U/_pinfo\
-
-
+	$U/_burn\
+	$U/_io\
+	$U/_quick\
+	$U/_sleep\
 
 ifeq ($(LAB),syscall)
 UPROGS += \

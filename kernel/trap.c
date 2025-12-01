@@ -87,6 +87,13 @@ printf("\nprocess %d ticks: %d\n", p->pid, p-> time_in_queue);
 ticks_since_boost++; //and also time since boost
 printf("ticks since boost: %d\n\n", ticks_since_boost);
 
+//kiya process ne apna time slice poora kiya
+int slice = (p->queue == 0 ? QUEUE1_TIME :
+                 p->queue == 1 ? QUEUE2_TIME :
+                 p->queue == 2 ? QUEUE3_TIME :
+                                  1000000); // Q3 has huge slice
+
+    if(p->time_in_queue >= slice)
     yield();
 }
   prepare_return();
