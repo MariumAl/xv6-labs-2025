@@ -117,4 +117,10 @@ sys_getprocinfo(void)
     }
     return 0;
 }
-
+extern void boost_all(void);
+uint64
+sys_boostproc(void)
+{
+  boost_all();
+  return 0;
+}

@@ -199,7 +199,6 @@ UPROGS=\
 	$U/_burn\
 	$U/_io\
 	$U/_quick\
-	$U/_sleep\
 
 ifeq ($(LAB),syscall)
 UPROGS += \
